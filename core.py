@@ -71,5 +71,45 @@ async def reply_message(msg: Message):
 @app.get("/")
 async def root():
     return {"status": "AI Agent running"}
+from fastapi import FastAPI, Request
+import os
+import requests
 
-print(os.getenv("OPENROUTER_API_KEY") is not None)
+app = FastAPI()
+
+PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")  # you invent this
+
+@app.get("/webhook")
+async def verify(request: Request):
+    params = request.query_params
+    if (
+        params.get("hub.mode") == "subscribe"
+        and params.get("hub.verify_token") == VERIFY_TOKEN
+    ):
+        return int(params.get("hub.challenge"))
+    return "Verification failed"
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+
+    for entry in data.get("entry", []):
+        for event in entry.get("messaging", []):
+            sender_id = event["sender"]["id"]
+
+            if "message" in event and "text" in event["message"]:
+                text = event["message"]["text"]
+
+                reply_text = "Got it."  # later replaced by your AI reply
+
+                requests.post(
+                    "https://graph.facebook.com/v18.0/me/messages",
+                    params={"access_token": PAGE_ACCESS_TOKEN},
+                    json={
+                        "recipient": {"id": sender_id},
+                        "message": {"text": reply_text},
+                    },
+                )
+
+    return {"status": "ok"}
